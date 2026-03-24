@@ -186,6 +186,14 @@
     margin-top: 0.8rem;
   }
 
+  .timer-display .slide-elapsed {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 300;
+    opacity: 0.6;
+    margin-top: 0.6rem;
+  }
+
   .timer-display.overtime .countdown {
     color: #ffffff;
   }
@@ -334,6 +342,7 @@
     <div class="timer-display" id="timerDisplay">
       <div class="slide-label" id="slideLabel">SLIDE 1 / 11</div>
       <div class="countdown" id="countdown">6:00</div>
+      <div class="slide-elapsed" id="slideElapsed">0:00 on this slide</div>
       <div class="status-text" id="statusText">tap to advance slide</div>
     </div>
     <div class="back-btn-container">
@@ -465,9 +474,22 @@ function updateTimerUI(elapsed) {
   var countdownEl = document.getElementById('countdown');
   var slideLabelEl = document.getElementById('slideLabel');
   var statusEl = document.getElementById('statusText');
+  var slideElapsedEl = document.getElementById('slideElapsed');
   var doneBtn = document.getElementById('doneBtn');
 
   slideLabelEl.textContent = 'SLIDE ' + (currentSlide + 1) + ' / ' + totalSlides;
+
+  // Calculate total time on current slide (sum all segments for this slide index)
+  var currentSlideMs = 0;
+  for (var i = 0; i < segments.length; i++) {
+    if (segments[i].slideIndex === currentSlide) {
+      currentSlideMs += segments[i].endMs - segments[i].startMs;
+    }
+  }
+  var csSec = Math.floor(currentSlideMs / 1000);
+  var csM = Math.floor(csSec / 60);
+  var csS = csSec % 60;
+  slideElapsedEl.textContent = csM + ':' + (csS < 10 ? '0' : '') + csS + ' on this slide';
 
   if (isOvertime) {
     display.classList.add('overtime');
