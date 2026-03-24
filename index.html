@@ -153,13 +153,18 @@
     width: 100%;
     height: 100%;
     cursor: pointer;
-    position: relative;
+    position: fixed;
+    top: 0; left: 0;
+    z-index: 10;
+  }
+
+  #timer.overtime {
+    mix-blend-mode: difference;
   }
 
   .timer-display {
     text-align: center;
     pointer-events: none;
-    mix-blend-mode: difference;
   }
 
   .timer-display .slide-label {
@@ -194,14 +199,6 @@
     margin-top: 0.6rem;
   }
 
-  .timer-display.overtime .countdown {
-    color: #ffffff;
-  }
-
-  .timer-display.overtime .slide-label {
-    color: #ffffff;
-  }
-
   .back-btn-container {
     position: absolute;
     bottom: 2.5rem;
@@ -216,7 +213,6 @@
   .back-btn-container .glass-btn {
     padding: 0.6rem 1.8rem;
     font-size: 0.85rem;
-    mix-blend-mode: difference;
     border-color: rgba(255, 255, 255, 0.25);
   }
 
@@ -337,20 +333,6 @@
     <button class="glass-btn accent" onclick="startTimer()">Start</button>
   </div>
 
-  <!-- Timer -->
-  <div id="timer" onclick="handleTap(event)">
-    <div class="timer-display" id="timerDisplay">
-      <div class="slide-label" id="slideLabel">SLIDE 1 / 11</div>
-      <div class="countdown" id="countdown">6:00</div>
-      <div class="slide-elapsed" id="slideElapsed">0:00 on this slide</div>
-      <div class="status-text" id="statusText">tap to advance slide</div>
-    </div>
-    <div class="back-btn-container">
-      <button class="glass-btn" id="backBtn" onclick="goBack(event)">Back</button>
-      <button class="glass-btn" id="doneBtn" onclick="finishPresentation(event)" style="display:none;">Done</button>
-    </div>
-  </div>
-
   <!-- Summary -->
   <div id="summary">
     <h2>Presentation Summary</h2>
@@ -358,6 +340,20 @@
     <div class="summary-total-label" id="summaryTotalLabel">total time</div>
     <div class="summary-slides" id="summarySlides"></div>
     <button class="glass-btn" onclick="resetAll()" style="margin-top:1rem;">Start Over</button>
+  </div>
+</div>
+
+<!-- Timer lives outside ui-layer so mix-blend-mode blends against canvas -->
+<div id="timer" onclick="handleTap(event)">
+  <div class="timer-display" id="timerDisplay">
+    <div class="slide-label" id="slideLabel">SLIDE 1 / 11</div>
+    <div class="countdown" id="countdown">6:00</div>
+    <div class="slide-elapsed" id="slideElapsed">0:00 on this slide</div>
+    <div class="status-text" id="statusText">tap to advance slide</div>
+  </div>
+  <div class="back-btn-container">
+    <button class="glass-btn" id="backBtn" onclick="goBack(event)">Back</button>
+    <button class="glass-btn" id="doneBtn" onclick="finishPresentation(event)" style="display:none;">Done</button>
   </div>
 </div>
 
@@ -493,6 +489,7 @@ function updateTimerUI(elapsed) {
 
   if (isOvertime) {
     display.classList.add('overtime');
+    document.getElementById('timer').classList.add('overtime');
     var overSec = Math.floor(Math.abs(remaining) / 1000);
     var overM = Math.floor(overSec / 60);
     var overS = overSec % 60;
@@ -501,6 +498,7 @@ function updateTimerUI(elapsed) {
     doneBtn.style.display = 'inline-block';
   } else {
     display.classList.remove('overtime');
+    document.getElementById('timer').classList.remove('overtime');
     var remSec = Math.ceil(remaining / 1000);
     var m = Math.floor(remSec / 60);
     var sec = remSec % 60;
