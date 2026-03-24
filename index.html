@@ -395,9 +395,31 @@ var L_SLIDE_MAX = 30;  // max lightness from slide steps
 var HUE = 0;
 var SAT = 80;
 
+function hslToRgb(h, s, l) {
+  // h: 0-360, s: 0-100, l: 0-100 -> [r, g, b] 0-255
+  s /= 100; l /= 100;
+  var c = (1 - Math.abs(2 * l - 1)) * s;
+  var x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  var m = l - c / 2;
+  var r, g, b;
+  if (h < 60)      { r = c; g = x; b = 0; }
+  else if (h < 120) { r = x; g = c; b = 0; }
+  else if (h < 180) { r = 0; g = c; b = x; }
+  else if (h < 240) { r = 0; g = x; b = c; }
+  else if (h < 300) { r = x; g = 0; b = c; }
+  else              { r = c; g = 0; b = x; }
+  return [(r + m) * 255 | 0, (g + m) * 255 | 0, (b + m) * 255 | 0];
+}
+
+function getColorRgb(timeProgress, slideIndex) {
+  var timeLightness = L_MIN + (timeProgress * L_TIME_MAX);
+  var slideLightness = ((slideIndex + 1) / totalSlides) * L_SLIDE_MAX;
+  var lightness = timeLightness + slideLightness;
+  if (lightness > L_MIN + L_TIME_MAX + L_SLIDE_MAX) lightness = L_MIN + L_TIME_MAX + L_SLIDE_MAX;
+  return hslToRgb(HUE, SAT, lightness);
+}
+
 function getColor(timeProgress, slideIndex) {
-  // timeProgress: 0..1 (how far through total time)
-  // slideIndex: 0..totalSlides-1
   var timeLightness = L_MIN + (timeProgress * L_TIME_MAX);
   var slideLightness = ((slideIndex + 1) / totalSlides) * L_SLIDE_MAX;
   var lightness = timeLightness + slideLightness;
@@ -406,9 +428,9 @@ function getColor(timeProgress, slideIndex) {
 }
 
 // ── Drawing ──
+// Build a lookup: for each pixel row, which segment owns it?
 function draw() {
   if (!running && !finished) {
-    // Setup state: solid black
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, W, H);
     requestAnimationFrame(draw);
@@ -419,43 +441,54 @@ function draw() {
   var elapsed = now - startTime;
   var progress = Math.min(elapsed / totalTimeMs, 1.0);
 
-  // Update the live segment's end time
   if (segments.length > 0 && !finished) {
     segments[segments.length - 1].endMs = elapsed;
   }
 
-  // Black background (unfilled future)
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, H);
+  // Build a 1px-wide column ImageData at native DPR resolution
+  var physH = Math.round(H * dpr);
+  var imgData = ctx.createImageData(1, physH);
+  var data = imgData.data;
 
-  // Draw each segment as rows of pixels with gradient
+  // Fill all black first
+  for (var p = 0; p < data.length; p += 4) {
+    data[p] = 0; data[p+1] = 0; data[p+2] = 0; data[p+3] = 255;
+  }
+
+  // Paint each segment's rows
   for (var i = 0; i < segments.length; i++) {
     var seg = segments[i];
-    var startY = Math.floor((seg.startMs / totalTimeMs) * H);
+    var startPx = Math.floor((seg.startMs / totalTimeMs) * physH);
     var endMs = Math.min(seg.endMs, totalTimeMs);
-    var endY = Math.floor((endMs / totalTimeMs) * H);
+    var endPx = Math.floor((endMs / totalTimeMs) * physH);
 
-    if (endY <= startY) continue;
-
-    // Draw row by row for the gradient effect
-    // Optimize: draw in small batches not single pixels
-    var batchSize = 2;
-    for (var y = startY; y < endY; y += batchSize) {
-      var rowProgress = y / H;  // 0..1 position on screen
-      ctx.fillStyle = getColor(rowProgress, seg.slideIndex);
-      var bh = Math.min(batchSize, endY - y);
-      ctx.fillRect(0, y, W, bh);
+    for (var row = startPx; row < endPx; row++) {
+      var rowProgress = row / physH;
+      var rgb = getColorRgb(rowProgress, seg.slideIndex);
+      var idx = row * 4;
+      data[idx] = rgb[0]; data[idx+1] = rgb[1]; data[idx+2] = rgb[2];
     }
   }
 
-  // Overtime: white fill from top
+  // Overtime: white from top
   if (elapsed > totalTimeMs && !finished) {
     var overtimeElapsed = elapsed - totalTimeMs;
     var overtimeProgress = Math.min(overtimeElapsed / totalTimeMs, 1.0);
-    var whiteY = Math.floor(overtimeProgress * H);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, whiteY);
+    var whitePx = Math.floor(overtimeProgress * physH);
+    for (var ow = 0; ow < whitePx; ow++) {
+      var oi = ow * 4;
+      data[oi] = 255; data[oi+1] = 255; data[oi+2] = 255;
+    }
   }
+
+  // Draw the 1px column then stretch to full width
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0); // reset to pixel coords
+  ctx.putImageData(imgData, 0, 0);
+  // Now stretch that 1px column across the full canvas width
+  ctx.drawImage(canvas, 0, 0, 1, physH, 0, 0, Math.round(W * dpr), physH);
+  ctx.restore();
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   // Update UI
   updateTimerUI(elapsed);
