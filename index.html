@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Slide Timer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&family=Outfit:wght@300;400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --glass-bg: rgba(0, 0, 0, 0.25);
+    --glass-bg-hover: rgba(0, 0, 0, 0.4);
+    --text-primary: #ffffff;
+    --text-muted: rgba(255, 255, 255, 0.6);
+    --accent: #ff3b3b;
+    --accent-glow: rgba(255, 59, 59, 0.3);
+  }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: 'Outfit', sans-serif;
+    color: var(--text-primary);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  canvas#bg {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+  }
+
+  /* ── Glass UI Layer ── */
+  .ui-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Setup Screen ── */
+  #setup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+    padding: 2rem;
+    width: 100%;
+    max-width: 400px;
+  }
+
+  #setup h1 {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    font-size: 1.8rem;
+    letter-spacing: -0.02em;
+    text-align: center;
+  }
+
+  #setup h1 span {
+    color: var(--accent);
+  }
+
+  .input-group {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .input-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+  }
+
+  .input-group input {
+    width: 100%;
+    padding: 0.9rem 1.2rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.2rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    -webkit-appearance: none;
+  }
+
+  .input-group input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+
+  .input-row {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+  }
+
+  .input-row .input-group { flex: 1; }
+
+  .glass-btn {
+    padding: 0.9rem 2.5rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    color: var(--text-primary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-appearance: none;
+  }
+
+  .glass-btn:hover, .glass-btn:active {
+    background: var(--glass-bg-hover);
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-btn.accent {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .glass-btn.accent:hover, .glass-btn.accent:active {
+    background: rgba(255, 59, 59, 0.15);
+    box-shadow: 0 0 30px var(--accent-glow);
+  }
+
+  /* ── Timer Screen ── */
+  #timer {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    position: relative;
+  }
+
+  .timer-display {
+    text-align: center;
+    pointer-events: none;
+    mix-blend-mode: difference;
+  }
+
+  .timer-display .slide-label {
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 0.3rem;
+  }
+
+  .timer-display .countdown {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 5rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .timer-display .status-text {
+    font-size: 0.85rem;
+    font-weight: 300;
+    opacity: 0.5;
+    margin-top: 0.8rem;
+  }
+
+  .timer-display.overtime .countdown {
+    color: #ffffff;
+  }
+
+  .timer-display.overtime .slide-label {
+    color: #ffffff;
+  }
+
+  .back-btn-container {
+    position: absolute;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 1rem;
+    pointer-events: auto;
+    z-index: 20;
+  }
+
+  .back-btn-container .glass-btn {
+    padding: 0.6rem 1.8rem;
+    font-size: 0.85rem;
+    mix-blend-mode: difference;
+    border-color: rgba(255, 255, 255, 0.25);
+  }
+
+  /* ── Summary Screen ── */
+  #summary {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 2rem 1.5rem;
+    width: 100%;
+    max-width: 500px;
+    max-height: 100vh;
+    overflow-y: auto;
+    gap: 1.2rem;
+  }
+
+  #summary h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+  }
+
+  .summary-total {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .summary-total-label {
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+  }
+
+  .summary-slides {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .summary-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.7rem 1rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+  }
+
+  .summary-row .swatch {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    flex-shrink: 0;
+  }
+
+  .summary-row .slide-name {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .summary-row .slide-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+  }
+
+  .summary-row .slide-pct {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    width: 3.5rem;
+    text-align: right;
+  }
+
+  .overtime-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    background: rgba(255, 59, 59, 0.2);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    margin-left: 0.5rem;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+
+<div class="ui-layer">
+  <!-- Setup -->
+  <div id="setup">
+    <h1>Slide <span>Timer</span></h1>
+    <div class="input-row">
+      <div class="input-group">
+        <label>Minutes</label>
+        <input type="number" id="inputMinutes" value="6" min="1" max="120" inputmode="numeric">
+      </div>
+      <div class="input-group">
+        <label>Seconds</label>
+        <input type="number" id="inputSeconds" value="0" min="0" max="59" inputmode="numeric">
+      </div>
+    </div>
+    <div class="input-group">
+      <label>Number of Slides</label>
+      <input type="number" id="inputSlides" value="11" min="1" max="100" inputmode="numeric">
+    </div>
+    <button class="glass-btn accent" onclick="startTimer()">Start</button>
+  </div>
+
+  <!-- Timer -->
+  <div id="timer" onclick="handleTap(event)">
+    <div class="timer-display" id="timerDisplay">
+      <div class="slide-label" id="slideLabel">SLIDE 1 / 11</div>
+      <div class="countdown" id="countdown">6:00</div>
+      <div class="status-text" id="statusText">tap to advance slide</div>
+    </div>
+    <div class="back-btn-container">
+      <button class="glass-btn" id="backBtn" onclick="goBack(event)">Back</button>
+      <button class="glass-btn" id="doneBtn" onclick="finishPresentation(event)" style="display:none;">Done</button>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div id="summary">
+    <h2>Presentation Summary</h2>
+    <div class="summary-total" id="summaryTotal">5:23</div>
+    <div class="summary-total-label" id="summaryTotalLabel">total time</div>
+    <div class="summary-slides" id="summarySlides"></div>
+    <button class="glass-btn" onclick="resetAll()" style="margin-top:1rem;">Start Over</button>
+  </div>
+</div>
+
+<script>
+// ── State ──
+var totalTimeMs = 0;
+var totalSlides = 0;
+var currentSlide = 0;  // 0-indexed
+var startTime = 0;
+var segments = [];      // { slideIndex, startMs, endMs }
+var running = false;
+var finished = false;
+var overtimeStartMs = 0;
+
+// ── Canvas ──
+var canvas = document.getElementById('bg');
+var ctx = canvas.getContext('2d');
+var dpr = window.devicePixelRatio || 1;
+var W, H;
+
+function resizeCanvas() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ── Color math ──
+// Lightness from 5% (dark) to 55% (bright)
+// Two sources: time contributes up to 25%, slide steps contribute up to 30%
+var L_MIN = 5;
+var L_TIME_MAX = 25;   // max lightness from time alone
+var L_SLIDE_MAX = 30;  // max lightness from slide steps
+var HUE = 0;
+var SAT = 80;
+
+function getColor(timeProgress, slideIndex) {
+  // timeProgress: 0..1 (how far through total time)
+  // slideIndex: 0..totalSlides-1
+  var timeLightness = L_MIN + (timeProgress * L_TIME_MAX);
+  var slideLightness = ((slideIndex + 1) / totalSlides) * L_SLIDE_MAX;
+  var lightness = timeLightness + slideLightness;
+  if (lightness > L_MIN + L_TIME_MAX + L_SLIDE_MAX) lightness = L_MIN + L_TIME_MAX + L_SLIDE_MAX;
+  return 'hsl(' + HUE + ',' + SAT + '%,' + lightness + '%)';
+}
+
+// ── Drawing ──
+function draw() {
+  if (!running && !finished) {
+    // Setup state: solid black
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, H);
+    requestAnimationFrame(draw);
+    return;
+  }
+
+  var now = Date.now();
+  var elapsed = now - startTime;
+  var progress = Math.min(elapsed / totalTimeMs, 1.0);
+
+  // Update the live segment's end time
+  if (segments.length > 0 && !finished) {
+    segments[segments.length - 1].endMs = elapsed;
+  }
+
+  // Black background (unfilled future)
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, H);
+
+  // Draw each segment as rows of pixels with gradient
+  for (var i = 0; i < segments.length; i++) {
+    var seg = segments[i];
+    var startY = Math.floor((seg.startMs / totalTimeMs) * H);
+    var endMs = Math.min(seg.endMs, totalTimeMs);
+    var endY = Math.floor((endMs / totalTimeMs) * H);
+
+    if (endY <= startY) continue;
+
+    // Draw row by row for the gradient effect
+    // Optimize: draw in small batches not single pixels
+    var batchSize = 2;
+    for (var y = startY; y < endY; y += batchSize) {
+      var rowProgress = y / H;  // 0..1 position on screen
+      ctx.fillStyle = getColor(rowProgress, seg.slideIndex);
+      var bh = Math.min(batchSize, endY - y);
+      ctx.fillRect(0, y, W, bh);
+    }
+  }
+
+  // Overtime: white fill from top
+  if (elapsed > totalTimeMs && !finished) {
+    var overtimeElapsed = elapsed - totalTimeMs;
+    var overtimeProgress = Math.min(overtimeElapsed / totalTimeMs, 1.0);
+    var whiteY = Math.floor(overtimeProgress * H);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, whiteY);
+  }
+
+  // Update UI
+  updateTimerUI(elapsed);
+
+  requestAnimationFrame(draw);
+}
+
+function updateTimerUI(elapsed) {
+  var remaining = totalTimeMs - elapsed;
+  var isOvertime = remaining < 0;
+  var display = document.getElementById('timerDisplay');
+  var countdownEl = document.getElementById('countdown');
+  var slideLabelEl = document.getElementById('slideLabel');
+  var statusEl = document.getElementById('statusText');
+  var doneBtn = document.getElementById('doneBtn');
+
+  slideLabelEl.textContent = 'SLIDE ' + (currentSlide + 1) + ' / ' + totalSlides;
+
+  if (isOvertime) {
+    display.classList.add('overtime');
+    var overSec = Math.floor(Math.abs(remaining) / 1000);
+    var overM = Math.floor(overSec / 60);
+    var overS = overSec % 60;
+    countdownEl.textContent = '+' + overM + ':' + (overS < 10 ? '0' : '') + overS;
+    statusEl.textContent = 'overtime';
+    doneBtn.style.display = 'inline-block';
+  } else {
+    display.classList.remove('overtime');
+    var remSec = Math.ceil(remaining / 1000);
+    var m = Math.floor(remSec / 60);
+    var sec = remSec % 60;
+    countdownEl.textContent = m + ':' + (sec < 10 ? '0' : '') + sec;
+
+    if (currentSlide >= totalSlides - 1) {
+      statusEl.textContent = 'last slide';
+    } else {
+      statusEl.textContent = 'tap to advance slide';
+    }
+  }
+}
+
+// ── Timer Controls ──
+function startTimer() {
+  var minutes = parseInt(document.getElementById('inputMinutes').value) || 0;
+  var seconds = parseInt(document.getElementById('inputSeconds').value) || 0;
+  totalSlides = parseInt(document.getElementById('inputSlides').value) || 1;
+  totalTimeMs = (minutes * 60 + seconds) * 1000;
+
+  if (totalTimeMs <= 0) return;
+
+  currentSlide = 0;
+  segments = [{ slideIndex: 0, startMs: 0, endMs: 0 }];
+  startTime = Date.now();
+  running = true;
+  finished = false;
+
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('timer').style.display = 'flex';
+  document.getElementById('doneBtn').style.display = 'none';
+}
+
+function handleTap(event) {
+  // Don't advance if tapping buttons
+  if (event.target.closest('.glass-btn')) return;
+  if (!running || finished) return;
+
+  var elapsed = Date.now() - startTime;
+
+  // Lock current segment
+  segments[segments.length - 1].endMs = elapsed;
+
+  if (currentSlide >= totalSlides - 1) {
+    // Past the last slide — finish
+    finishPresentation(event);
+    return;
+  }
+
+  // Advance
+  currentSlide++;
+  segments.push({ slideIndex: currentSlide, startMs: elapsed, endMs: elapsed });
+}
+
+function goBack(event) {
+  event.stopPropagation();
+  if (!running || finished) return;
+  if (currentSlide <= 0) return;
+
+  var elapsed = Date.now() - startTime;
+
+  // Lock current segment
+  segments[segments.length - 1].endMs = elapsed;
+
+  // Go back
+  currentSlide--;
+  segments.push({ slideIndex: currentSlide, startMs: elapsed, endMs: elapsed });
+}
+
+function finishPresentation(event) {
+  if (event) event.stopPropagation();
+  if (finished) return;
+
+  var elapsed = Date.now() - startTime;
+  segments[segments.length - 1].endMs = elapsed;
+  finished = true;
+  running = false;
+
+  showSummary(elapsed);
+}
+
+// ── Summary ──
+function showSummary(totalElapsed) {
+  document.getElementById('timer').style.display = 'none';
+  document.getElementById('summary').style.display = 'flex';
+
+  // Total time display
+  var totalSec = Math.round(totalElapsed / 1000);
+  var tm = Math.floor(totalSec / 60);
+  var ts = totalSec % 60;
+  document.getElementById('summaryTotal').textContent = tm + ':' + (ts < 10 ? '0' : '') + ts;
+
+  var isOver = totalElapsed > totalTimeMs;
+  if (isOver) {
+    var overSec = Math.round((totalElapsed - totalTimeMs) / 1000);
+    var om = Math.floor(overSec / 60);
+    var os = overSec % 60;
+    document.getElementById('summaryTotalLabel').innerHTML = 'total time <span class="overtime-badge">+' + om + ':' + (os < 10 ? '0' : '') + os + ' over</span>';
+  } else {
+    var underSec = Math.round((totalTimeMs - totalElapsed) / 1000);
+    var um = Math.floor(underSec / 60);
+    var us = underSec % 60;
+    document.getElementById('summaryTotalLabel').textContent = um + ':' + (us < 10 ? '0' : '') + us + ' remaining';
+  }
+
+  // Aggregate time per slide (a slide can appear multiple times due to back)
+  var slideTime = [];
+  for (var i = 0; i < totalSlides; i++) slideTime.push(0);
+
+  for (var j = 0; j < segments.length; j++) {
+    var seg = segments[j];
+    var dur = seg.endMs - seg.startMs;
+    if (seg.slideIndex < totalSlides) {
+      slideTime[seg.slideIndex] += dur;
+    }
+  }
+
+  var container = document.getElementById('summarySlides');
+  container.innerHTML = '';
+
+  for (var k = 0; k < totalSlides; k++) {
+    var ms = slideTime[k];
+    var sec = Math.round(ms / 1000);
+    var sm = Math.floor(sec / 60);
+    var ss = sec % 60;
+    var pct = totalElapsed > 0 ? Math.round((ms / totalElapsed) * 100) : 0;
+
+    // Color swatch: use the midpoint brightness for this slide
+    var midProgress = 0.5;
+    var color = getColor(midProgress, k);
+
+    var row = document.createElement('div');
+    row.className = 'summary-row';
+    row.innerHTML = '<div class="swatch" style="background:' + color + '"></div>' +
+      '<div class="slide-name">Slide ' + (k + 1) + '</div>' +
+      '<div class="slide-time">' + sm + ':' + (ss < 10 ? '0' : '') + ss + '</div>' +
+      '<div class="slide-pct">' + pct + '%</div>';
+    container.appendChild(row);
+  }
+}
+
+function resetAll() {
+  running = false;
+  finished = false;
+  segments = [];
+  currentSlide = 0;
+  document.getElementById('summary').style.display = 'none';
+  document.getElementById('timer').style.display = 'none';
+  document.getElementById('setup').style.display = 'flex';
+}
+
+// ── Boot ──
+requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
